@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pablo Score Tracker</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .score-change {
+            animation: pop 0.3s ease-in-out;
+            color: #ef4444 !important; /* Red for gaining points (usually bad in these games) */
+            transition: color 0.3s ease;
+        }
+
+        .card-enter {
+            animation: slideIn 0.4s ease-out forwards;
+        }
+        
+        /* Custom scrollbar for player inputs if it gets too long on small devices */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+    <header class="bg-slate-800 border-b border-slate-700 shadow-lg py-3 px-4 sm:px-6 sticky top-0 z-10">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-600 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-gamepad text-base sm:text-xl text-white"></i>
+                </div>
+                <h1 class="text-xl sm:text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    Pablo Tracker
+                </h1>
+            </div>
+            <button id="reset-app-btn" class="hidden text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-700">
+                <i class="fa-solid fa-rotate-left"></i> <span class="hidden sm:inline">New Game</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center p-3 sm:p-6">
+        
+        <!-- Screen 1: Setup -->
+        <div id="setup-screen" class="w-full max-w-2xl bg-slate-800 rounded-xl sm:rounded-2xl shadow-xl border border-slate-700 overflow-hidden mt-2 sm:mt-4">
+            <div class="p-4 sm:p-5 border-b border-slate-700 bg-slate-800/50">
+                <h2 class="text-lg sm:text-xl font-semibold text-white mb-1">Setup Players</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Add up to 8 players.</p>
+            </div>
+            
+            <div class="p-4 sm:p-5">
+                <div id="player-inputs-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                    <!-- Inputs injected here by JS -->
+                </div>
+                
+                <div class="flex items-center justify-between gap-4">
+                    <button id="add-player-btn" class="flex-1 py-2 px-4 rounded-lg sm:rounded-xl font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-all flex items-center justify-center gap-2 text-sm sm:text-base">
+                        <i class="fa-solid fa-plus"></i> Add Player
+                    </button>
+                </div>
+            </div>
+            
+            <div class="p-4 sm:p-5 bg-slate-900/50 border-t border-slate-700">
+                <button id="start-game-btn" class="w-full py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 text-sm sm:text-base">
+                    Start Game <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 2: Game Board -->
+        <div id="game-screen" class="w-full max-w-3xl hidden flex-col mt-2 sm:mt-4">
+            
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-2">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-white">Scoreboard</h2>
+                    <p class="text-slate-400 text-xs sm:text-sm mt-1">Win: Others get +10 | Loss: You get +15</p>
+                </div>
+            </div>
+
+            <div id="scoreboard-grid" class="flex flex-col bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-700 overflow-hidden shadow-lg">
+                <!-- Player rows injected here -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Edit Score Modal -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="edit-modal-backdrop"></div>
+        <div class="relative bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-xs p-6 m-4 transform transition-all scale-95 opacity-0" id="edit-modal-content">
+            <h3 class="text-lg font-bold text-white mb-1">Edit Score</h3>
+            <p id="edit-player-name" class="text-indigo-400 text-sm font-medium mb-4">Player Name</p>
+            
+            <div class="mb-5">
+                <label for="new-score-input" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">New Score</label>
+                <div class="relative">
+                    <input type="number" id="new-score-input" class="w-full bg-slate-900 border border-slate-600 rounded-xl py-3 px-4 text-white text-lg font-bold text-center focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button id="cancel-edit-btn" class="flex-1 py-2.5 rounded-xl font-medium text-slate-300 bg-slate-700 hover:bg-slate-600 transition-colors">
+                    Cancel
+                </button>
+                <button id="save-edit-btn" class="flex-1 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // App State
+        const MAX_PLAYERS = 8;
+        const WIN_POINTS_TO_OTHERS = 10;
+        const LOSS_POINTS_TO_SELF = 15;
+        
+        let players = [];
+        let currentlyEditingIndex = -1;
+
+        // DOM Elements
+        const setupScreen = document.getElementById('setup-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const playerInputsContainer = document.getElementById('player-inputs-container');
+        const addPlayerBtn = document.getElementById('add-player-btn');
+        const startGameBtn = document.getElementById('startGame-btn'); // Typo fix below
+        const startGameButton = document.getElementById('start-game-btn');
+        const scoreboardGrid = document.getElementById('scoreboard-grid');
+        const resetAppBtn = document.getElementById('reset-app-btn');
+        
+        // Modal Elements
+        const editModal = document.getElementById('edit-modal');
+        const editModalBackdrop = document.getElementById('edit-modal-backdrop');
+        const editModalContent = document.getElementById('edit-modal-content');
+        const editPlayerName = document.getElementById('edit-player-name');
+        const newScoreInput = document.getElementById('new-score-input');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+
+        // Initialize Setup Screen
+        function initSetup() {
+            playerInputsContainer.innerHTML = '';
+            // Start with 2 empty inputs
+            addPlayerInput();
+            addPlayerInput();
+            updateSetupUI();
+        }
+
+        function addPlayerInput() {
+            const currentCount = playerInputsContainer.children.length;
+            if (currentCount >= MAX_PLAYERS) return;
+
+            const inputId = `player-input-${currentCount}`;
+            const div = document.createElement('div');
+            div.className = 'relative group';
+            div.innerHTML = `
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <i class="fa-solid fa-user text-slate-500 group-focus-within:text-indigo-400 transition-colors text-sm"></i>
+                </div>
+                <input type="text" id="${inputId}" placeholder="Player ${currentCount + 1}" 
+                    class="player-name-input w-full bg-slate-900 border border-slate-700 rounded-lg py-2 pl-9 pr-9 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm sm:text-base">
+                ${currentCount >= 2 ? `
+                <button type="button" class="remove-input-btn absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-red-400 transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                ` : ''}
+            `;
+            playerInputsContainer.appendChild(div);
+
+            // Add listener to new remove button if it exists
+            const removeBtn = div.querySelector('.remove-input-btn');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    div.remove();
+                    updateSetupUI();
+                });
+            }
+            
+            // Add listeners to input to validate start button
+            const input = div.querySelector('input');
+            input.addEventListener('input', updateSetupUI);
+
+            updateSetupUI();
+            
+            // Focus new input if it's not the initial setup
+            if (currentCount >= 2) {
+                input.focus();
+            }
+        }
+
+        function updateSetupUI() {
+            const currentCount = playerInputsContainer.children.length;
+            addPlayerBtn.disabled = currentCount >= MAX_PLAYERS;
+            if (currentCount >= MAX_PLAYERS) {
+                addPlayerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                addPlayerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            // Check if at least 2 inputs have text
+            const inputs = document.querySelectorAll('.player-name-input');
+            let validNames = 0;
+            inputs.forEach(input => {
+                if (input.value.trim().length > 0) validNames++;
+            });
+
+            startGameButton.disabled = validNames < 2;
+        }
+
+        addPlayerBtn.addEventListener('click', addPlayerInput);
+
+        startGameButton.addEventListener('click', () => {
+            const inputs = document.querySelectorAll('.player-name-input');
+            players = [];
+            
+            inputs.forEach(input => {
+                const name = input.value.trim();
+                if (name) {
+                    players.push({
+                        name: name,
+                        score: 0
+                    });
+                }
+            });
+
+            if (players.length >= 2) {
+                setupScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+                gameScreen.classList.add('flex');
+                resetAppBtn.classList.remove('hidden');
+                renderScoreboard();
+            }
+        });
+
+        resetAppBtn.addEventListener('click', () => {
+            // Custom modern confirm instead of alert() could be used here, but 
+            // to keep it simple and strictly adhere to "no confirm()", we'll just reset.
+            // In a larger app we'd use another modal for confirmation.
+            setupScreen.classList.remove('hidden');
+            gameScreen.classList.add('hidden');
+            gameScreen.classList.remove('flex');
+            resetAppBtn.classList.add('hidden');
+            initSetup();
+        });
+
+        function handleWin(winnerIndex) {
+            players.forEach((player, index) => {
+                if (index !== winnerIndex) {
+                    player.score += WIN_POINTS_TO_OTHERS;
+                    animateScoreChange(index);
+                }
+            });
+            renderScoreboard();
+        }
+
+        function handleLoss(loserIndex) {
+            players[loserIndex].score += LOSS_POINTS_TO_SELF;
+            animateScoreChange(loserIndex);
+            renderScoreboard();
+        }
+        
+        // Track indices that need animation
+        let animatingIndices = new Set();
+        
+        function animateScoreChange(index) {
+            animatingIndices.add(index);
+            setTimeout(() => {
+                animatingIndices.delete(index);
+                const scoreEl = document.getElementById(`score-${index}`);
+                if(scoreEl) {
+                    scoreEl.classList.remove('score-change');
+                }
+            }, 300);
+        }
+
+        function renderScoreboard() {
+            scoreboardGrid.innerHTML = '';
+            
+            players.forEach((player, index) => {
+                const isAnimating = animatingIndices.has(index);
+                const row = document.createElement('div');
+                // Ensure row entry animation only plays once on initial render
+                const animationClass = player.rendered ? '' : 'card-enter';
+                player.rendered = true;
+                
+                const borderClass = index < players.length - 1 ? 'border-b border-slate-700/50' : '';
+                
+                row.className = `flex items-center justify-between p-3 sm:p-4 hover:bg-slate-700/30 transition-colors ${borderClass} ${animationClass}`;
+                row.style.animationDelay = `${index * 0.03}s`;
+                
+                row.innerHTML = `
+                    <div class="flex items-center flex-1 min-w-0 mr-2 sm:mr-4">
+                        <span class="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs flex items-center justify-center font-bold mr-3 shrink-0">${index + 1}</span>
+                        <h3 class="font-bold text-sm sm:text-lg text-white truncate" title="${player.name}">${player.name}</h3>
+                    </div>
+                    
+                    <div class="flex items-center gap-3 sm:gap-6 shrink-0">
+                        <div class="w-10 sm:w-16 text-right">
+                            <span id="score-${index}" class="text-lg sm:text-2xl font-black text-white tracking-tight ${isAnimating ? 'score-change' : ''}">
+                                ${player.score}
+                            </span>
+                        </div>
+                        
+                        <div class="flex items-center gap-1 sm:gap-2">
+                            <button onclick="handleWin(${index})" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-bold text-teal-300 bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 hover:border-teal-500/40 transition-all flex items-center justify-center group" title="Win (+10 to others)">
+                                <i class="fa-solid fa-trophy text-xs sm:text-sm group-hover:scale-110 transition-transform"></i>
+                            </button>
+                            <button onclick="handleLoss(${index})" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40 transition-all flex items-center justify-center group" title="Loss (+15 to self)">
+                                <i class="fa-solid fa-skull text-xs sm:text-sm group-hover:scale-110 transition-transform"></i>
+                            </button>
+                            <div class="w-px h-5 bg-slate-700 mx-0.5 sm:mx-1"></div>
+                            <button onclick="openEditModal(${index})" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-slate-700/50 transition-colors flex items-center justify-center" title="Edit Score">
+                                <i class="fa-solid fa-pen-to-square text-xs sm:text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                scoreboardGrid.appendChild(row);
+            });
+        }
+
+        function openEditModal(index) {
+            currentlyEditingIndex = index;
+            editPlayerName.textContent = players[index].name;
+            newScoreInput.value = players[index].score;
+            
+            // Show modal
+            editModal.classList.remove('hidden');
+            editModal.classList.add('flex');
+            
+            // Animate in
+            setTimeout(() => {
+                editModalContent.classList.remove('scale-95', 'opacity-0');
+                editModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            
+            newScoreInput.focus();
+            newScoreInput.select();
+        }
+
+        function closeEditModal() {
+            // Animate out
+            editModalContent.classList.remove('scale-100', 'opacity-100');
+            editModalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                editModal.classList.add('hidden');
+                editModal.classList.remove('flex');
+                currentlyEditingIndex = -1;
+            }, 200);
+        }
+
+        cancelEditBtn.addEventListener('click', closeEditModal);
+        editModalBackdrop.addEventListener('click', closeEditModal);
+        
+        // Allow pressing Escape to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !editModal.classList.contains('hidden')) {
+                closeEditModal();
+            }
+        });
+
+        // Allow pressing Enter to save
+        newScoreInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveEditBtn.click();
+            }
+        });
+
+        saveEditBtn.addEventListener('click', () => {
+            if (currentlyEditingIndex !== -1) {
+                const newScore = parseInt(newScoreInput.value, 10);
+                if (!isNaN(newScore)) {
+                    players[currentlyEditingIndex].score = newScore;
+                    animateScoreChange(currentlyEditingIndex);
+                    renderScoreboard();
+                    closeEditModal();
+                }
+            }
+        });
+
+        // Initialize App
+        initSetup();
+
+    </script>
+</body>
+</html>
